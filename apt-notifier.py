@@ -6,8 +6,55 @@ import os
 import tempfile
 from os import environ
 
-from PyQt5 import QtWidgets, QtGui
-from PyQt5 import QtCore
+#   qt5: QtGui renamed to QtWidgets, except for QIcon.
+#   qt5: QIcon still comes from QtGui.
+try:
+    from PyQt5 import QtCore
+    from PyQt5 import QtWidgets
+    from PyQt5.QtGui import QIcon
+    qt5 = True
+except:
+    from PyQt4 import QtCore
+    from PyQt4 import QtGui as QtWidgets
+    QIcon = QtWidgets.QIcon
+    qt5 = False
+
+class QTBIND:
+    def addAction( self, txt, cb ):
+        act = ActionsMenu.addAction( txt )
+        self.set_trig( act, cb )
+    def addAction2( self, icon, txt, cb ):
+        act = ActionsMenu.addAction( icon, txt )
+        self.set_trig( act, cb )
+    def set_trig( self, act, cb ):
+        'set menu callbacks'
+        pass
+    def set_act( self, icon, cb ):
+        'set cb for icon activated in systray'
+        pass
+    def set_timer( self, cb ):
+        'set cb for timer'
+        pass
+
+class QT5( QTBIND ):
+    def set_trig( self, act, cb ):
+        act.triggered.connect( cb )
+    def set_act( self, icon, cb ):
+        icon.activated.connect( cb )
+    def set_timer( self, cb ):
+        Timer.timeout.connect( cb )
+class QT4( QTBIND ):
+    def set_trig( self, act, cb ):
+        AptNotify.connect( act, QtCore.SIGNAL("triggered()"), cb )
+    def set_act( self, icon, cb ):
+        icon.connect( icon,
+            QtCore.SIGNAL( "activated(QSystemTrayIcon::ActivationReason)" ),
+            cb )
+    def set_timer( self, cb ):
+        AptNotify.connect( Timer, QtCore.SIGNAL("timeout()"), cb )
+
+#   create the signal binder
+qtbind = QT5() if qt5 else QT4()
 
 rc_file_name = environ.get('HOME') + '/.config/apt-notifierrc'
 message_status = "not displayed"
@@ -1469,13 +1516,13 @@ def add_rightclick_actions():
     command_string = "cat " + rc_file_name + " | grep -q LeftClick=ViewAndUpgrade"
     exit_state = subprocess.call([command_string], shell=True, stdout=subprocess.PIPE)
     if exit_state == 0:
-        ActionsMenu.addAction(View_and_Upgrade).triggered.connect( viewandupgrade0 )
+        qtbind.addAction(View_and_Upgrade, viewandupgrade0)
         ActionsMenu.addSeparator()
-        ActionsMenu.addAction(Upgrade_using_Synaptic).triggered.connect( start_synaptic0 )
+        qtbind.addAction(Upgrade_using_Synaptic, start_synaptic0 )
     else:
-        ActionsMenu.addAction(Upgrade_using_Synaptic).triggered.connect( start_synaptic0)
+        qtbind.addAction(Upgrade_using_Synaptic, start_synaptic0)
         ActionsMenu.addSeparator()
-        ActionsMenu.addAction(View_and_Upgrade).triggered.connect( viewandupgrade0 )
+        qtbind.addAction(View_and_Upgrade, viewandupgrade0 )
     add_apt_history_action()        
     add_apt_get_update_action()
     add_apt_notifier_help_action()
@@ -1486,10 +1533,9 @@ def add_rightclick_actions():
 def add_hide_action():
     ActionsMenu.clear()
     if icon_config == "show":
-        hide_action = ActionsMenu.addAction(Hide_until_updates_available)
-        hide_action.triggered.connect( set_noicon )
+        qtbind.addAction(Hide_until_updates_available, set_noicon)
         ActionsMenu.addSeparator()
-        ActionsMenu.addAction(u"Synaptic").triggered.connect( start_synaptic0 )
+        qtbind.addAction(u"Synaptic", start_synaptic0 )
     add_apt_history_action()    
     add_apt_get_update_action()
     add_apt_notifier_help_action()
@@ -1499,13 +1545,11 @@ def add_hide_action():
 
 def add_quit_action():
     ActionsMenu.addSeparator()
-    quit_action = ActionsMenu.addAction(QuitIcon,Quit_Apt_Notifier)
-    quit_action.triggered.connect( exit )
+    qtbind.addAction2(QuitIcon, Quit_Apt_Notifier, exit )
 
 def add_apt_notifier_help_action():
     ActionsMenu.addSeparator()
-    apt_notifier_help_action = ActionsMenu.addAction(HelpIcon,Apt_Notifier_Help)
-    apt_notifier_help_action.triggered.connect(open_apt_notifier_help)
+    qtbind.addAction2(HelpIcon, Apt_Notifier_Help, open_apt_notifier_help)
     
 def open_apt_notifier_help():
     script = '''#! /bin/bash
@@ -1530,8 +1574,7 @@ def open_apt_notifier_help():
 
 def add_synaptic_help_action():
     ActionsMenu.addSeparator()
-    synaptic_help_action = ActionsMenu.addAction(HelpIcon,Synaptic_Help)
-    synaptic_help_action.triggered.connect(open_synaptic_help)
+    qtbind.addAction2(HelpIcon, Synaptic_Help, open_synaptic_help )
     
 def open_synaptic_help():
     script = '''#! /bin/bash
@@ -1575,18 +1618,15 @@ def open_synaptic_help():
 
 def add_aptnotifier_prefs_action():
     ActionsMenu.addSeparator()
-    aptnotifier_prefs_action =  ActionsMenu.addAction(Apt_Notifier_Preferences)
-    aptnotifier_prefs_action.triggered.connect( aptnotifier_prefs )
+    qtbind.addAction(Apt_Notifier_Preferences, aptnotifier_prefs )
 
 def add_apt_history_action():
     ActionsMenu.addSeparator()
-    apt_history_action =  ActionsMenu.addAction(Apt_History)
-    apt_history_action.triggered.connect( apt_history )
+    qtbind.addAction(Apt_History, apt_history )
 
 def add_apt_get_update_action():
     ActionsMenu.addSeparator()
-    apt_get_update_action =  ActionsMenu.addAction(Check_for_Updates)
-    apt_get_update_action.triggered.connect( apt_get_update )
+    qtbind.addAction(Check_for_Updates, apt_get_update )
 
 # General application code	
 def main():
@@ -1615,15 +1655,15 @@ def main():
     # read in icon look into a variable
     icon_set = read_icon_look()
     
-    NoUpdatesIcon = QtGui.QIcon("/usr/share/icons/mnotify-none-" + icon_set + ".png")
-    NewUpdatesIcon  = QtGui.QIcon("/usr/share/icons/mnotify-some-" + icon_set + ".png")
-    HelpIcon = QtGui.QIcon("/usr/share/icons/oxygen/22x22/apps/help-browser.png")
-    QuitIcon = QtGui.QIcon("/usr/share/icons/oxygen/22x22/actions/system-shutdown.png")
+    NoUpdatesIcon = QIcon("/usr/share/icons/mnotify-none-" + icon_set + ".png")
+    NewUpdatesIcon  = QIcon("/usr/share/icons/mnotify-some-" + icon_set + ".png")
+    HelpIcon = QIcon("/usr/share/icons/oxygen/22x22/apps/help-browser.png")
+    QuitIcon = QIcon("/usr/share/icons/oxygen/22x22/actions/system-shutdown.png")
     # Create the right-click menu and add the Tooltip text
     global ActionsMenu
     ActionsMenu = QtWidgets.QMenu()
-    AptIcon.activated.connect( left_click_activated )
-    Timer.timeout.connect( check_updates )
+    qtbind.set_act( AptIcon, left_click_activated )
+    qtbind.set_timer( check_updates )
     # Integrate it together,apply checking of updated packages and set timer to every 1 minute(s) (1 second = 1000)
     AptIcon.setIcon(NoUpdatesIcon)
     AptIcon.setContextMenu(ActionsMenu)
